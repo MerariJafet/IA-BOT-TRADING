@@ -51,6 +51,14 @@ reinforce:
 	@echo 'Simulando recompensas y actualizando patrones...'
 	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.reinforcement_adapter
 
+simulate:
+	@echo 'Ejecutando simulación de mercado...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.simulation_environment
+
+evaluate:
+	@echo 'Evaluando política con agente de refuerzo...'
+	@$(PYTHON) -m pytest -q tests/test_simulation_environment.py
+
 freeze:
 	pip freeze > requirements_locked.txt
 
