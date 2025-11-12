@@ -1,0 +1,25 @@
+name: ia-bot-trading
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - matplotlib
+  - scikit-learn
+  - lightgbm
+  - optuna
+  - pytorch
+  - torchvision
+  - torchaudio
+  - fastapi
+  - uvicorn
+  - streamlit
+  - pyyaml
+  - pytest
+  - black
+  - flake8
+  - isort
+  - pip
+  - pip:
+      - optuna
