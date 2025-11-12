@@ -79,6 +79,14 @@ learn:
 	@echo 'Ejecutando refinamiento de política...'
 	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.self_learning_agent
 
+train-pred:
+	@echo 'Entrenando modelo predictivo LSTM...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.predictive_model
+
+hybrid:
+	@echo 'Ejecutando agente híbrido...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.hybrid_agent
+
 freeze:
 	pip freeze > requirements_locked.txt
 
