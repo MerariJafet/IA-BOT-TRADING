@@ -87,6 +87,10 @@ hybrid:
 	@echo 'Ejecutando agente híbrido...'
 	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.hybrid_agent
 
+analyze:
+	@echo 'Ejecutando análisis de rentabilidad...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.profitability_analyzer
+
 freeze:
 	pip freeze > requirements_locked.txt
 
