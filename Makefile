@@ -71,6 +71,14 @@ optimize:
 	@echo 'Ejecutando optimización genética de estrategias...'
 	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.genetic_optimizer
 
+backtest:
+	@echo 'Ejecutando backtesting con datos reales...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.backtester
+
+learn:
+	@echo 'Ejecutando refinamiento de política...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.self_learning_agent
+
 freeze:
 	pip freeze > requirements_locked.txt
 
