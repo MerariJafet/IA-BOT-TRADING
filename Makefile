@@ -115,6 +115,14 @@ auto-retrain:
 	@echo 'Ejecutando reentrenamiento automático si aplica...'
 	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.auto_retrain_scheduler
 
+dashboard:
+	@echo 'Lanzando dashboard de terminal interactivo...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.dashboard.terminal_dashboard
+
+benchmark:
+	@echo 'Ejecutando evaluación de benchmark vs BTC/USD y S&P500...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.benchmark_evaluator
+
 freeze:
 	pip freeze > requirements_locked.txt
 
