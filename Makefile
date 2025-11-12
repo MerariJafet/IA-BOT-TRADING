@@ -43,6 +43,14 @@ clusters:
 	@echo 'Ejecutando clustering de patrones...'
 	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.pattern_clustering
 
+patterns:
+	@echo 'Construyendo pattern library...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.pattern_library
+
+reinforce:
+	@echo 'Simulando recompensas y actualizando patrones...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.reinforcement_adapter
+
 freeze:
 	pip freeze > requirements_locked.txt
 
