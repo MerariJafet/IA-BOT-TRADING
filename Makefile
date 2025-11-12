@@ -91,6 +91,14 @@ analyze:
 	@echo 'Ejecutando análisis de rentabilidad...'
 	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.profitability_analyzer
 
+live-trade:
+	@echo 'Ejecutando trades en Binance TestNet...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.execution_engine
+
+retrain:
+	@echo 'Reentrenando política con resultados en vivo...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.live_retrainer
+
 freeze:
 	pip freeze > requirements_locked.txt
 
