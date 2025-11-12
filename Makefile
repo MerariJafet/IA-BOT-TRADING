@@ -99,6 +99,14 @@ retrain:
 	@echo 'Reentrenando política con resultados en vivo...'
 	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.live_retrainer
 
+portfolio:
+	@echo 'Ejecutando gestor de portafolio...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.portfolio_manager
+
+risk:
+	@echo 'Calculando métricas de riesgo...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.portfolio_manager
+
 freeze:
 	pip freeze > requirements_locked.txt
 
