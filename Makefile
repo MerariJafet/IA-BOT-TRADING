@@ -107,6 +107,14 @@ risk:
 	@echo 'Calculando métricas de riesgo...'
 	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.portfolio_manager
 
+monitor:
+	@echo 'Iniciando monitoreo continuo...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.monitoring_service
+
+auto-retrain:
+	@echo 'Ejecutando reentrenamiento automático si aplica...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.auto_retrain_scheduler
+
 freeze:
 	pip freeze > requirements_locked.txt
 
