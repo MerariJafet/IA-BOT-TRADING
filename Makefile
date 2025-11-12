@@ -67,6 +67,10 @@ dash:
 	@echo 'Lanzando dashboard interactivo...'
 	@PYTHONPATH="$(PWD)" $(PYTHON) -m streamlit run src/dashboard/strategy_dashboard.py
 
+optimize:
+	@echo 'Ejecutando optimización genética de estrategias...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.genetic_optimizer
+
 freeze:
 	pip freeze > requirements_locked.txt
 
