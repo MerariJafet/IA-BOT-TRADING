@@ -59,6 +59,14 @@ evaluate:
 	@echo 'Evaluando política con agente de refuerzo...'
 	@$(PYTHON) -m pytest -q tests/test_simulation_environment.py
 
+live:
+	@echo 'Iniciando emulador de señales en tiempo real...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m src.core.signal_emulator
+
+dash:
+	@echo 'Lanzando dashboard interactivo...'
+	@PYTHONPATH="$(PWD)" $(PYTHON) -m streamlit run src/dashboard/strategy_dashboard.py
+
 freeze:
 	pip freeze > requirements_locked.txt
 
