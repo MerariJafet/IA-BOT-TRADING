@@ -1,0 +1,3 @@
+Attempt: export OMP_NUM_THREADS=1 KMP_DUPLICATE_LIB_OK=TRUE
+Command: source .venv/bin/activate && python -c "import torch; print('⚙️ Torch fallback OK:', torch.__version__)"
+Result: OMP Error #179 - Can't open SHM2 (system error #2, No such file or directory). Process aborted.

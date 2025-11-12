@@ -26,3 +26,14 @@ IA BOT TRADING/
 
 ## Sprint 0 - Objetivo
 Configurar entorno técnico y base de desarrollo reproducible.
+
+## Autenticación opcional con Binance
+Para ejecutar endpoints que requieran firma o límites extendidos:
+- Define `BINANCE_API_KEY` y `BINANCE_API_SECRET` en el archivo `.env` en la raíz del proyecto (no se versiona).
+- Ejecuta `make check_env` para validar que las variables se cargan correctamente y que la API responde usando la API Key configurada.
+- El comando imprime confirmación de las credenciales y realiza una llamada autenticada a `exchangeInfo`. Úsalo antes de correr pipelines que dependan de acceso autenticado.
+
+## Tokenización dinámica (Dollar & Imbalance bars)
+- Coloca los históricos normalizados de Binance en `data/historical_1y_parquet/<SIMBOLO>.parquet`.
+- Corre `make tokenize` y completa los prompts (símbolo, método y threshold) para generar secuencias en `data/tokens/`.
+- Los métodos disponibles son `dollar` (acumulación por volumen nocional) e `imbalance` (desequilibrio compra/venta). Ambos generan archivos Parquet que sirven como entrada al módulo de embeddings.
