@@ -4,3 +4,8 @@ __pycache__/
 data/
 reports/
 .installed_packages_list.txt
+.env
+src/ia_bot_trading.egg-info/
+dist/
+build/
+*.bak
