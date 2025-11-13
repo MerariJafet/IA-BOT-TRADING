@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -83,9 +83,7 @@ class ProfitabilityAnalyzer:
         profit_factor = gross_profit / gross_loss
         return float(profit_factor)
 
-    def calculate_sharpe_ratio(
-        self, returns: pd.Series, risk_free_rate: float = 0.02
-    ) -> float:
+    def calculate_sharpe_ratio(self, returns: pd.Series, risk_free_rate: float = 0.02) -> float:
         """
         Calcula el Sharpe Ratio.
 
@@ -113,9 +111,7 @@ class ProfitabilityAnalyzer:
         sharpe = (mean_excess / std_excess) * np.sqrt(periods_per_year)
         return float(sharpe)
 
-    def calculate_sortino_ratio(
-        self, returns: pd.Series, risk_free_rate: float = 0.02
-    ) -> float:
+    def calculate_sortino_ratio(self, returns: pd.Series, risk_free_rate: float = 0.02) -> float:
         """
         Calcula el Sortino Ratio (similar a Sharpe pero solo con downside risk).
 
@@ -164,13 +160,21 @@ class ProfitabilityAnalyzer:
         # Calcular drawdown
         drawdown = equity_curve - running_max
         max_drawdown = drawdown.min()
-        max_drawdown_pct = (max_drawdown / running_max.max()) * 100 if running_max.max() > 0 else 0.0
+        if running_max.max() > 0:
+            max_drawdown_pct = (max_drawdown / running_max.max()) * 100
+        else:
+            max_drawdown_pct = 0.0
 
         # Tiempo de recuperación (aproximado)
         if max_drawdown < 0:
             dd_idx = drawdown.idxmin()
-            recovery_idx = equity_curve[dd_idx:][equity_curve >= running_max[dd_idx]].first_valid_index()
-            recovery_time = (recovery_idx - dd_idx) if recovery_idx is not None else len(equity_curve) - dd_idx
+            post_drawdown = equity_curve[dd_idx:]
+            recovery_candidates = post_drawdown[post_drawdown >= running_max[dd_idx]]
+            recovery_idx = recovery_candidates.first_valid_index()
+            if recovery_idx is not None:
+                recovery_time = recovery_idx - dd_idx
+            else:
+                recovery_time = len(equity_curve) - dd_idx
         else:
             recovery_time = 0
 
@@ -207,7 +211,7 @@ class ProfitabilityAnalyzer:
             consistency = 1 / (1 + cv)
 
         # Score combinado
-        stability = (win_rate * 0.6 + consistency * 0.4)
+        stability = win_rate * 0.6 + consistency * 0.4
         return float(np.clip(stability, 0, 1))
 
     def generate_profitability_report(self) -> Dict:
@@ -241,7 +245,9 @@ class ProfitabilityAnalyzer:
         roi = self.calculate_roi(trades_df)
         profit_factor = self.calculate_profit_factor(trades_df)
 
-        returns = trades_df["return"] if "return" in trades_df.columns else pd.Series([0])
+        returns = (
+            trades_df["return"] if "return" in trades_df.columns else pd.Series([0], dtype=float)
+        )
         sharpe = self.calculate_sharpe_ratio(returns)
         sortino = self.calculate_sortino_ratio(returns)
 
@@ -277,8 +283,12 @@ class ProfitabilityAnalyzer:
             },
             "capital": {
                 "initial": self.initial_capital,
-                "final": float(equity_curve.iloc[-1]) if len(equity_curve) > 0 else self.initial_capital,
-                "peak": float(equity_curve.max()) if len(equity_curve) > 0 else self.initial_capital,
+                "final": (
+                    float(equity_curve.iloc[-1]) if len(equity_curve) > 0 else self.initial_capital
+                ),
+                "peak": (
+                    float(equity_curve.max()) if len(equity_curve) > 0 else self.initial_capital
+                ),
             },
         }
 
@@ -290,19 +300,22 @@ class ProfitabilityAnalyzer:
         with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
 
-        logger.info(f"✅ Reporte guardado en {report_path}")
+        logger.info("✅ Reporte guardado en %s", report_path)
 
         # Generar ranking de estrategia
         self._generate_strategy_ranking(report)
 
         # Log resumen
         logger.info("📈 Resumen de Rentabilidad:")
-        logger.info(f"  ROI: {roi:.2f}%")
-        logger.info(f"  Profit Factor: {profit_factor:.2f}")
-        logger.info(f"  Sharpe Ratio: {sharpe:.2f}")
-        logger.info(f"  Sortino Ratio: {sortino:.2f}")
-        logger.info(f"  Max Drawdown: {drawdown_metrics['max_drawdown_pct']:.2f}%")
-        logger.info(f"  Stability Score: {stability:.2f}")
+        logger.info("  ROI: %.2f%%", roi)
+        logger.info("  Profit Factor: %.2f", profit_factor)
+        logger.info("  Sharpe Ratio: %.2f", sharpe)
+        logger.info("  Sortino Ratio: %.2f", sortino)
+        logger.info(
+            "  Max Drawdown: %.2f%%",
+            drawdown_metrics["max_drawdown_pct"],
+        )
+        logger.info("  Stability Score: %.2f", stability)
 
         return report
 
@@ -330,13 +343,13 @@ class ProfitabilityAnalyzer:
         }
 
         df = pd.DataFrame(ranking_data)
-        
+
         # Usar el mismo directorio que el archivo de reportes
         ranking_dir = Path(self.trades_path).parent
         ranking_path = ranking_dir / "strategy_ranking.csv"
         df.to_csv(ranking_path, index=False)
 
-        logger.info(f"✅ Ranking guardado en {ranking_path}")
+        logger.info("✅ Ranking guardado en %s", ranking_path)
 
     def _empty_report(self) -> Dict:
         """Retorna un reporte vacío."""

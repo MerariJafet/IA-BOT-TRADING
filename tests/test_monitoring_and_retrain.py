@@ -102,9 +102,7 @@ def auto_scheduler(tmp_path, monkeypatch):
     weights_path = tmp_path / "policy_weights.json"
     retraining_log_path = tmp_path / "retraining_log.json"
 
-    monkeypatch.setattr(
-        "src.core.live_retrainer.LiveRetrainer.LIVE_TRADES_PATH", str(trades_path)
-    )
+    monkeypatch.setattr("src.core.live_retrainer.LiveRetrainer.LIVE_TRADES_PATH", str(trades_path))
     monkeypatch.setattr(
         "src.core.live_retrainer.LiveRetrainer.POLICY_WEIGHTS_PATH", str(weights_path)
     )
@@ -227,9 +225,7 @@ def test_generate_alert(monitoring_service, tmp_path):
     """Test generación de alertas."""
     alerts_path = tmp_path / "alerts.json"
 
-    monitoring_service.generate_alert(
-        "TEST_ALERT", "This is a test alert", severity="WARNING"
-    )
+    monitoring_service.generate_alert("TEST_ALERT", "This is a test alert", severity="WARNING")
 
     assert alerts_path.exists()
 
@@ -404,9 +400,7 @@ def test_retrain_history_logging(auto_scheduler, tmp_path):
     """Test que se registre el historial de reentrenamiento."""
     history_path = tmp_path / "retrain_history.json"
 
-    auto_scheduler._log_retrain_event(
-        reasons=["Test reason"], success=True, message="Test message"
-    )
+    auto_scheduler._log_retrain_event(reasons=["Test reason"], success=True, message="Test message")
 
     assert history_path.exists()
 
@@ -417,7 +411,9 @@ def test_retrain_history_logging(auto_scheduler, tmp_path):
     assert len(history["retrains"]) == 1
 
 
-def test_drift_triggers_retrain_after_threshold(auto_scheduler, sample_trades_bad, tmp_path, monkeypatch):
+def test_drift_triggers_retrain_after_threshold(
+    auto_scheduler, sample_trades_bad, tmp_path, monkeypatch
+):
     """Test integración: drift sostenido dispara reentrenamiento."""
     trades_path = tmp_path / "live_trades.parquet"
     sample_trades_bad.to_parquet(trades_path)

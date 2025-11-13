@@ -14,16 +14,17 @@ Genera reportes y gráficos de equity curve.
 """
 
 import json
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import requests
 from scipy.stats import linregress
+
+from .binance_market_data import BinanceMarketData
 
 ROOT_DIR = Path(__file__).parent.parent.parent
 DATA_DIR = ROOT_DIR / "data"
@@ -45,6 +46,8 @@ class BenchmarkEvaluator:
         trades_path: str = str(LIVE_TRADES_PATH),
         initial_capital: float = 100000.0,
         risk_free_rate: float = 0.04,  # 4% anual
+        market_data_client: Optional[BinanceMarketData] = None,
+        btc_symbol: str = "BTCUSDT",
     ):
         """
         Args:
@@ -55,6 +58,8 @@ class BenchmarkEvaluator:
         self.trades_path = Path(trades_path)
         self.initial_capital = initial_capital
         self.risk_free_rate = risk_free_rate
+        self.market_data_client = market_data_client or BinanceMarketData()
+        self.btc_symbol = btc_symbol.upper()
 
         self.trades: Optional[pd.DataFrame] = None
         self.btc_prices: Optional[pd.DataFrame] = None
@@ -75,7 +80,8 @@ class BenchmarkEvaluator:
 
     def fetch_btc_prices(self, start_date: str, end_date: str) -> pd.DataFrame:
         """
-        Descarga precios históricos de BTC/USD desde CoinGecko API.
+        Descarga precios históricos de BTC/USD usando Binance como fuente principal
+        con CoinGecko como fallback.
 
         Args:
             start_date: Fecha inicial YYYY-MM-DD
@@ -84,12 +90,38 @@ class BenchmarkEvaluator:
         Returns:
             DataFrame con columnas: timestamp, btc_price
         """
-        # CoinGecko API - /coins/bitcoin/market_chart/range
-        start_ts = int(pd.Timestamp(start_date).timestamp())
-        end_ts = int(pd.Timestamp(end_date).timestamp())
+        start_ts = pd.Timestamp(start_date).tz_localize("UTC")
+        end_ts = pd.Timestamp(end_date).tz_localize("UTC") + pd.Timedelta(days=1)
 
-        url = f"https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range"
-        params = {"vs_currency": "usd", "from": start_ts, "to": end_ts}
+        binance_df = pd.DataFrame()
+        try:
+            binance_df = self.market_data_client.fetch_ohlcv(
+                symbol=self.btc_symbol,
+                start=start_ts,
+                end=end_ts,
+                interval="1h",
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            print(f"Error descargando precios de BTC desde Binance: {exc}")
+
+        if not binance_df.empty:
+            btc_df = binance_df[["timestamp", "close"]].copy()
+            btc_df.rename(columns={"close": "btc_price"}, inplace=True)
+            # Convertir a timestamps sin tz para alineación con trades
+            btc_df["timestamp"] = btc_df["timestamp"].dt.tz_convert(None)
+            self.btc_prices = btc_df.sort_values("timestamp").reset_index(drop=True)
+            return self.btc_prices
+
+        # Fallback a CoinGecko si Binance falla o no retorna datos
+        if self.btc_symbol != "BTCUSDT":
+            self.btc_prices = pd.DataFrame(columns=["timestamp", "btc_price"])
+            return self.btc_prices
+
+        start_ts_int = int(pd.Timestamp(start_date).timestamp())
+        end_ts_int = int(pd.Timestamp(end_date).timestamp())
+
+        url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range"
+        params = {"vs_currency": "usd", "from": start_ts_int, "to": end_ts_int}
 
         try:
             response = requests.get(url, params=params, timeout=30)
@@ -105,9 +137,9 @@ class BenchmarkEvaluator:
             return self.btc_prices
 
         except Exception as e:
-            print(f"Error descargando precios de BTC: {e}")
-            # Retornar DataFrame vacío
-            return pd.DataFrame(columns=["timestamp", "btc_price"])
+            print(f"Error descargando precios de BTC desde CoinGecko: {e}")
+            self.btc_prices = pd.DataFrame(columns=["timestamp", "btc_price"])
+            return self.btc_prices
 
     def fetch_sp500_prices(self, start_date: str, end_date: str) -> pd.DataFrame:
         """
@@ -200,7 +232,9 @@ class BenchmarkEvaluator:
         final_equity = equity_curve.iloc[-1]["equity"]
 
         # Calcular días transcurridos
-        days = (equity_curve.iloc[-1]["timestamp"] - equity_curve.iloc[0]["timestamp"]).days
+        last_timestamp = equity_curve.iloc[-1]["timestamp"]
+        first_timestamp = equity_curve.iloc[0]["timestamp"]
+        days = (last_timestamp - first_timestamp).days
 
         if days <= 0 or initial_equity <= 0:
             return 0.0
@@ -220,7 +254,7 @@ class BenchmarkEvaluator:
         """
         Calcula Alpha y Beta vs benchmark.
 
-        Alpha = Retorno del portfolio - (Risk-free rate + Beta * (Benchmark return - Risk-free rate))
+        Alpha = Retorno del portfolio - (Risk-free rate + Beta * diferencia vs benchmark).
         Beta = Cov(portfolio, benchmark) / Var(benchmark)
 
         Args:
@@ -275,9 +309,7 @@ class BenchmarkEvaluator:
         df["rolling_mean"] = df["returns"].rolling(window).mean()
         df["rolling_std"] = df["returns"].rolling(window).std()
 
-        df["sharpe_ratio"] = (
-            (df["rolling_mean"] - daily_rf) / df["rolling_std"]
-        ) * np.sqrt(252)
+        df["sharpe_ratio"] = ((df["rolling_mean"] - daily_rf) / df["rolling_std"]) * np.sqrt(252)
 
         return df[["timestamp", "sharpe_ratio"]].dropna()
 
@@ -365,12 +397,24 @@ class BenchmarkEvaluator:
         if not self.btc_prices.empty:
             btc_returns_df = self.calculate_benchmark_returns(self.btc_prices, "btc_price")
 
-            # Alinear retornos
+            # Normalizar timestamps para evitar conflictos de zona horaria en merge_asof
+            btc_df = btc_returns_df.copy()
+            equity_df = equity_curve.copy()
+
+            btc_df["timestamp"] = pd.to_datetime(btc_df["timestamp"], utc=True).dt.tz_localize(None)
+            equity_df["timestamp"] = pd.to_datetime(equity_df["timestamp"], utc=False)
+            if getattr(equity_df["timestamp"].dtype, "tz", None) is not None:
+                equity_df["timestamp"] = equity_df["timestamp"].dt.tz_localize(None)
+
+            btc_df["timestamp"] = btc_df["timestamp"].astype("datetime64[ns]")
+            equity_df["timestamp"] = equity_df["timestamp"].astype("datetime64[ns]")
+
+            # Alinear retornos con merge_asof una vez que ambas series son naive
             merged_btc = pd.merge_asof(
-                equity_curve.sort_values("timestamp"),
-                btc_returns_df.sort_values("timestamp"),
+                equity_df.sort_values("timestamp"),
+                btc_df.sort_values("timestamp"),
                 on="timestamp",
-                direction="nearest",
+                direction="backward",
             )
             btc_returns = merged_btc["returns"].dropna()
 
@@ -392,13 +436,27 @@ class BenchmarkEvaluator:
         # 5. Calcular métricas vs S&P500
         sp500_metrics = {}
         if not self.sp500_prices.empty:
-            sp500_returns_df = self.calculate_benchmark_returns(self.sp500_prices, "sp500_price")
+            sp500_returns_df = self.calculate_benchmark_returns(
+                self.sp500_prices,
+                "sp500_price",
+            )
+
+            sp500_df = sp500_returns_df.copy()
+            sp_equity_df = equity_curve.copy()
+
+            sp500_df["timestamp"] = pd.to_datetime(sp500_df["timestamp"], utc=True).dt.tz_localize(None)
+            sp_equity_df["timestamp"] = pd.to_datetime(sp_equity_df["timestamp"], utc=False)
+            if getattr(sp_equity_df["timestamp"].dtype, "tz", None) is not None:
+                sp_equity_df["timestamp"] = sp_equity_df["timestamp"].dt.tz_localize(None)
+
+            sp500_df["timestamp"] = sp500_df["timestamp"].astype("datetime64[ns]")
+            sp_equity_df["timestamp"] = sp_equity_df["timestamp"].astype("datetime64[ns]")
 
             merged_sp500 = pd.merge_asof(
-                equity_curve.sort_values("timestamp"),
-                sp500_returns_df.sort_values("timestamp"),
+                sp_equity_df.sort_values("timestamp"),
+                sp500_df.sort_values("timestamp"),
                 on="timestamp",
-                direction="nearest",
+                direction="backward",
             )
             sp500_returns = merged_sp500["returns"].dropna()
 
@@ -545,10 +603,16 @@ def main():
     parser.add_argument(
         "--capital", type=float, default=100000.0, help="Capital inicial (default: 100000)"
     )
+    parser.add_argument(
+        "--symbol",
+        type=str,
+        default="BTCUSDT",
+        help="Símbolo de Binance a utilizar para el benchmark BTC (default: BTCUSDT)",
+    )
 
     args = parser.parse_args()
 
-    evaluator = BenchmarkEvaluator(initial_capital=args.capital)
+    evaluator = BenchmarkEvaluator(initial_capital=args.capital, btc_symbol=args.symbol)
 
     print(f"🔍 Generando reporte de benchmark para {args.start} → {args.end}")
 
@@ -564,9 +628,7 @@ def main():
         (equity_curve["timestamp"] >= args.start) & (equity_curve["timestamp"] <= args.end)
     ]
 
-    evaluator.plot_equity_curve(
-        equity_curve, evaluator.btc_prices, evaluator.sp500_prices
-    )
+    evaluator.plot_equity_curve(equity_curve, evaluator.btc_prices, evaluator.sp500_prices)
 
     # Mostrar resumen
     print("\n📊 RESUMEN DE BENCHMARK")

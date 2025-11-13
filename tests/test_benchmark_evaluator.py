@@ -54,16 +54,12 @@ def benchmark_evaluator(tmp_path, monkeypatch):
     benchmark_comparison_path = tmp_path / "benchmark_comparison.json"
     equity_curve_path = tmp_path / "equity_curve.png"
 
-    monkeypatch.setattr(
-        "src.core.benchmark_evaluator.LIVE_TRADES_PATH", str(trades_path)
-    )
+    monkeypatch.setattr("src.core.benchmark_evaluator.LIVE_TRADES_PATH", str(trades_path))
     monkeypatch.setattr(
         "src.core.benchmark_evaluator.BENCHMARK_COMPARISON_PATH",
         str(benchmark_comparison_path),
     )
-    monkeypatch.setattr(
-        "src.core.benchmark_evaluator.EQUITY_CURVE_PATH", str(equity_curve_path)
-    )
+    monkeypatch.setattr("src.core.benchmark_evaluator.EQUITY_CURVE_PATH", str(equity_curve_path))
 
     evaluator = BenchmarkEvaluator(
         trades_path=str(trades_path),
@@ -248,7 +244,9 @@ def test_calculate_benchmark_returns(benchmark_evaluator):
 # ==================== INTEGRATION TESTS ====================
 
 
-def test_generate_comparison_report(benchmark_evaluator, sample_trades_profitable, tmp_path, monkeypatch):
+def test_generate_comparison_report(
+    benchmark_evaluator, sample_trades_profitable, tmp_path, monkeypatch
+):
     """Test generación de reporte completo."""
     trades_path = tmp_path / "live_trades.parquet"
     sample_trades_profitable.to_parquet(trades_path)
