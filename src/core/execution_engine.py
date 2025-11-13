@@ -11,7 +11,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
-from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional
@@ -402,8 +401,9 @@ class ExecutionEngine:
         return {
             "balance_usdt": self.paper_balance,
             "position_btc": self.paper_position,
-            "total_value_usdt": self.paper_balance
-            + (self.paper_position * self.get_current_price()),
+            "total_value_usdt": self.paper_balance + (
+                self.paper_position * self.get_current_price()
+            ),
         }
 
 
