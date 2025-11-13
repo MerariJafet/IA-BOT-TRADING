@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import time
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import pandas as pd
 import requests
@@ -156,9 +155,7 @@ class ExecutionEngine:
             logger.error(f"❌ Error obteniendo precio: {e}")
             return 50000.0  # Fallback
 
-    def execute_market_order(
-        self, side: OrderSide, quantity: float
-    ) -> Optional[Dict]:
+    def execute_market_order(self, side: OrderSide, quantity: float) -> Optional[Dict]:
         """
         Ejecuta una orden MARKET.
 
@@ -174,9 +171,7 @@ class ExecutionEngine:
         else:
             return self._execute_testnet_order(side, OrderType.MARKET, quantity, None)
 
-    def execute_limit_order(
-        self, side: OrderSide, quantity: float, price: float
-    ) -> Optional[Dict]:
+    def execute_limit_order(self, side: OrderSide, quantity: float, price: float) -> Optional[Dict]:
         """
         Ejecuta una orden LIMIT.
 
@@ -217,7 +212,7 @@ class ExecutionEngine:
 
         # Simular ejecución
         order_id = f"PAPER_{int(time.time() * 1000)}"
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = pd.Timestamp.utcnow()
 
         # Calcular costo/ingreso
         total_cost = quantity * exec_price
@@ -251,7 +246,7 @@ class ExecutionEngine:
         pnl = self._calculate_paper_pnl(side, quantity, exec_price)
 
         order_details = {
-            "timestamp": timestamp,
+            "timestamp": timestamp.isoformat(),
             "order_id": order_id,
             "symbol": self.symbol,
             "side": side.value,
@@ -266,15 +261,11 @@ class ExecutionEngine:
         # Registrar en archivo
         self._log_trade(order_details)
 
-        logger.info(
-            f"✅ Paper {side.value} ejecutado: {quantity} @ {exec_price} | PnL: {pnl:.2f}"
-        )
+        logger.info(f"✅ Paper {side.value} ejecutado: {quantity} @ {exec_price} | PnL: {pnl:.2f}")
 
         return order_details
 
-    def _calculate_paper_pnl(
-        self, side: OrderSide, quantity: float, price: float
-    ) -> float:
+    def _calculate_paper_pnl(self, side: OrderSide, quantity: float, price: float) -> float:
         """Calcula PnL aproximado para paper trading."""
         # PnL simplificado basado en variación de precio
         if side == OrderSide.BUY:
@@ -334,7 +325,7 @@ class ExecutionEngine:
 
             # Construir detalles
             order_details = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": pd.Timestamp.utcnow().isoformat(),
                 "order_id": str(order_data.get("orderId", "N/A")),
                 "symbol": self.symbol,
                 "side": side.value,
@@ -349,9 +340,7 @@ class ExecutionEngine:
             # Registrar trade
             self._log_trade(order_details)
 
-            logger.info(
-                f"✅ TestNet {side.value} ejecutado: {quantity} @ {order_details['price']}"
-            )
+            logger.info(f"✅ TestNet {side.value} ejecutado: {quantity} @ {order_details['price']}")
 
             return order_details
 
@@ -376,7 +365,13 @@ class ExecutionEngine:
 
         # Agregar nuevo trade
         df_new = pd.DataFrame([order_details])
+        df_new["timestamp"] = pd.to_datetime(df_new["timestamp"], utc=True)
+
+        if not df_existing.empty and "timestamp" in df_existing.columns:
+            df_existing["timestamp"] = pd.to_datetime(df_existing["timestamp"], utc=True)
+
         df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+        df_combined["timestamp"] = pd.to_datetime(df_combined["timestamp"], utc=True)
 
         # Guardar
         df_combined.to_parquet(trades_path, index=False)
