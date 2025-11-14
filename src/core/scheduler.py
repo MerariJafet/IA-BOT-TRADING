@@ -54,6 +54,7 @@ class SchedulerService:
 		self._watchdog_check_fn = watchdog_check_fn
 		self._daily_report_fn = daily_report_fn
 		self._started = False
+		self._expected_runs: Dict[str, datetime] = {}
 
 	def start(self) -> None:
 		if self._started:
@@ -75,13 +76,27 @@ class SchedulerService:
 		self._jobs["daily_report"] = self._scheduler.every().day.at("23:55").do(
 			self._run_job, "daily_report", self._daily_report_fn
 		)
+		for name, job in self._jobs.items():
+			self._expected_runs[name] = job.next_run
 
 	def _run_job(self, name: str, func: Callable[[], Optional[bool]]) -> None:
+		expected_run = self._expected_runs.get(name)
+		now = datetime.now()
+		jitter_seconds: Optional[float] = None
+		if expected_run:
+			jitter_seconds = (now - expected_run).total_seconds()
 		try:
 			result = func()
-			LOGGER.info("Job '%s' ejecutado. resultado=%s", name, result)
+			job = self._jobs.get(name)
+			next_run = job.next_run if job else None
+			jitter_display = f"{jitter_seconds:.3f}s" if jitter_seconds is not None else "N/A"
+			LOGGER.info("Job '%s' ejecutado. resultado=%s jitter=%s proximorun=%s", name, result, jitter_display, next_run)
 		except Exception as exc:  # pragma: no cover - logging only
 			LOGGER.exception("Job '%s' falló: %s", name, exc)
+		finally:
+			job = self._jobs.get(name)
+			if job:
+				self._expected_runs[name] = job.next_run
 
 	def run_pending(self) -> None:
 		"""Ejecuta todas las tareas cuyo horario esté vencido."""
@@ -93,6 +108,7 @@ class SchedulerService:
 		if not job:
 			raise KeyError(f"Job '{name}' no encontrado")
 		job.next_run = datetime.now()
+		self._expected_runs[name] = job.next_run
 		self.run_pending()
 
 	def jobs(self) -> Dict[str, schedule.Job]:

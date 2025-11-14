@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import faulthandler
+import io
 import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Deque, Optional, Tuple
+
+try:
+    import psutil
+except ImportError:  # pragma: no cover - optional dependency
+    psutil = None  # type: ignore[assignment]
 
 from src.core.daily_report import generate_daily_report
 from src.core.execution_engine import ExecutionEngine, ExecutionMode, OrderSide
@@ -18,6 +26,7 @@ from src.core.scheduler import SchedulerService
 from src.core.watchdog import Watchdog
 
 MAIN_LOG = Path("logs/main.log")
+METRICS_LOG = Path("logs/metrics.log")
 
 
 def _ensure_directory(path: Path) -> None:
@@ -42,7 +51,13 @@ logger = get_logger("Main")
 _ensure_directory(MAIN_LOG)
 _attach_file_handler(logger, MAIN_LOG)
 
+metrics_logger = get_logger("Metrics")
+_ensure_directory(METRICS_LOG)
+_attach_file_handler(metrics_logger, METRICS_LOG)
+
 BASE_CAPITAL = 10000.0
+PROCESS_METRICS_INTERVAL = 60.0
+DEFAULT_FAULTHANDLER_TIMEOUT = 300.0
 
 
 class ErrorTracker:
@@ -69,6 +84,69 @@ class KillSwitchState:
     def update(self, active: bool) -> None:
         if active:
             self.triggered = True
+
+
+def _activate_fault_handler(timeout: float = DEFAULT_FAULTHANDLER_TIMEOUT) -> bool:
+    """Ensure faulthandler is armed to dump stack traces on stalls."""
+    try:
+        if not faulthandler.is_enabled():
+            faulthandler.enable()
+        faulthandler.dump_traceback_later(timeout, repeat=True)
+        logger.info("Faulthandler habilitado | timeout=%.0fs", timeout)
+        return True
+    except (RuntimeError, io.UnsupportedOperation) as exc:
+        logger.warning("Faulthandler no disponible: %s", exc)
+    except Exception as exc:  # pragma: no cover - defensive diag
+        logger.exception("Error inicializando faulthandler: %s", exc)
+    return False
+
+
+def _deactivate_fault_handler() -> None:
+    with contextlib.suppress(Exception):
+        faulthandler.cancel_dump_traceback_later()
+
+
+def _create_process_monitor() -> Optional["psutil.Process"]:
+    if psutil is None:
+        logger.warning("psutil no disponible; métricas del sistema deshabilitadas.")
+        return None
+    try:
+        process = psutil.Process()
+        process.cpu_percent(interval=None)
+        psutil.cpu_percent(interval=None)
+        logger.info("Monitoreo de recursos activado con psutil PID=%s", process.pid)
+        return process
+    except Exception as exc:  # pragma: no cover - defensive logging
+        if psutil is not None and isinstance(exc, psutil.Error):
+            logger.warning("psutil no pudo inicializarse: %s", exc)
+        else:
+            logger.warning("Error inesperado inicializando psutil: %s", exc)
+        return None
+
+
+def _log_process_metrics(process: "psutil.Process") -> None:
+    if psutil is None:
+        return
+    try:
+        cpu = process.cpu_percent(interval=None)
+        mem_info = process.memory_info()
+        rss_mb = mem_info.rss / (1024 ** 2)
+        vms_mb = mem_info.vms / (1024 ** 2)
+        system_cpu = psutil.cpu_percent(interval=None)
+        memory_percent = psutil.virtual_memory().percent
+        message = (
+            "Recursos proceso | cpu=%.2f%% rss=%.1fMB vms=%.1fMB cpu_sistema=%.2f%% ram=%.2f%%"
+            % (cpu, rss_mb, vms_mb, system_cpu, memory_percent)
+        )
+        metrics_logger.info(message)
+        logger.info(message)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        if psutil is not None and isinstance(exc, psutil.NoSuchProcess):
+            logger.warning("Proceso monitorizado por psutil ya no existe.")
+        elif psutil is not None and isinstance(exc, psutil.Error):
+            logger.warning("No se pudieron obtener métricas de psutil: %s", exc)
+        else:
+            logger.warning("Error inesperado obteniendo métricas de psutil: %s", exc)
 
 
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -165,41 +243,54 @@ def run_bot(args: argparse.Namespace) -> None:
         daily_report_fn=lambda: generate_daily_report(base_capital=BASE_CAPITAL),
     )
     scheduler_service.start()
+    faulthandler_active = _activate_fault_handler()
+    process_monitor = _create_process_monitor()
+    metrics_interval = max(PROCESS_METRICS_INTERVAL, float(args.interval))
+    last_metrics_at = time.monotonic() - metrics_interval
 
     iteration = 0
     max_iters = args.max_iters if args.max_iters > 0 else None
     loop_forever = args.loop or bool(max_iters is None and not args.check)
 
-    while True:
-        iteration += 1
+    try:
+        while True:
+            iteration += 1
 
-        watchdog.record_heartbeat()
-        scheduler_service.run_pending()
+            watchdog.record_heartbeat()
+            scheduler_service.run_pending()
 
-        if _evaluate_kill_switch(engine, error_tracker, kill_state):
-            logger.error("Kill switch activado. Deteniendo ejecución principal.")
-            break
+            monotonic_now = time.monotonic()
+            if process_monitor and monotonic_now - last_metrics_at >= metrics_interval:
+                _log_process_metrics(process_monitor)
+                last_metrics_at = monotonic_now
 
-        try:
-            dry_run = args.check
-            _perform_trading_cycle(engine, iteration, dry_run=dry_run)
-        except Exception as exc:  # pragma: no cover - runtime safeguard
-            logger.exception("Error en ciclo de trading: %s", exc)
-            error_tracker.register_error()
-        finally:
-            if args.check:
-                logger.info("Modo check completado. Saliendo.")
+            if _evaluate_kill_switch(engine, error_tracker, kill_state):
+                logger.error("Kill switch activado. Deteniendo ejecución principal.")
                 break
 
-        if max_iters and iteration >= max_iters:
-            logger.info("Máximo de iteraciones alcanzado (%s).", max_iters)
-            break
+            try:
+                dry_run = args.check
+                _perform_trading_cycle(engine, iteration, dry_run=dry_run)
+            except Exception as exc:  # pragma: no cover - runtime safeguard
+                logger.exception("Error en ciclo de trading: %s", exc)
+                error_tracker.register_error()
+            finally:
+                if args.check:
+                    logger.info("Modo check completado. Saliendo.")
+                    break
 
-        if not loop_forever:
-            logger.info("Ejecución única completada. Saliendo.")
-            break
+            if max_iters and iteration >= max_iters:
+                logger.info("Máximo de iteraciones alcanzado (%s).", max_iters)
+                break
 
-        time.sleep(max(args.interval, 1.0))
+            if not loop_forever:
+                logger.info("Ejecución única completada. Saliendo.")
+                break
+
+            time.sleep(max(args.interval, 1.0))
+    finally:
+        if faulthandler_active:
+            _deactivate_fault_handler()
 
 
 def main(argv: Optional[list[str]] = None) -> None:

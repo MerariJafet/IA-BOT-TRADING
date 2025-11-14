@@ -31,6 +31,7 @@ class Watchdog:
 		self.stale_after = stale_after
 		self.restart_command = list(restart_command) if restart_command else None
 		self._last_restart: Optional[datetime] = None
+		self._restart_count: int = 0
 
 		_ensure_directory(self.heartbeat_file)
 		_ensure_directory(self.log_file)
@@ -85,17 +86,24 @@ class Watchdog:
 			return False
 
 		self.logger.error("Watchdog: sin heartbeat reciente. Reiniciando bot...")
-		self._restart_process()
-		self._last_restart = datetime.utcnow()
-		return True
+		restarted = self._restart_process()
+		if restarted:
+			self._last_restart = datetime.utcnow()
+			self._restart_count += 1
+			self.logger.info("Watchdog reinició el bot | reinicios acumulados=%s", self._restart_count)
+		else:
+			self.logger.error("Watchdog no pudo reiniciar el bot tras detectar inactividad.")
+		return restarted
 
-	def _restart_process(self) -> None:
+	def _restart_process(self) -> bool:
 		command = self._build_restart_command()
 		try:
 			subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 			self.logger.info("Watchdog lanzó nuevo proceso con comando: %s", " ".join(command))
+			return True
 		except Exception as exc:  # pragma: no cover - defensive logging
 			self.logger.exception("Watchdog no pudo reiniciar el bot: %s", exc)
+			return False
 
 	def _build_restart_command(self) -> Sequence[str]:
 		if self.restart_command:
