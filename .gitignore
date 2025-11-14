@@ -1,7 +1,9 @@
 __pycache__/
 .venv/
 *.pyc
-data/
+data/*
+!data/historical/
+!data/historical/.gitkeep
 reports/
 configs/
 infra/
