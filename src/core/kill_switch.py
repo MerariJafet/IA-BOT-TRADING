@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import argparse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Optional
@@ -120,3 +121,41 @@ def check_kill_conditions(
 
 
 __all__ = ["check_kill_conditions", "KillSwitchResult", "KILL_SWITCH_FLAG", "KILL_SWITCH_LOG"]
+
+
+def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+	parser = argparse.ArgumentParser(description="Kill switch diagnostics")
+	parser.add_argument("--test", action="store_true", help="Ejecuta escenarios de prueba.")
+	return parser.parse_args(argv)
+
+
+def main(argv: Optional[list[str]] = None) -> None:
+	args = _parse_args(argv)
+
+	if args.test:
+		scenarios = [
+			({"pnl_acumulado": -0.01, "drawdown_relativo": -0.02}, 0.0, 0),
+			({"pnl_acumulado": -0.08, "drawdown_relativo": -0.1}, -10.0, 0),
+			({"pnl_acumulado": 0.0, "drawdown_relativo": -0.01}, 0.0, 3),
+		]
+
+		for idx, (state, pnl, errors) in enumerate(scenarios, start=1):
+			triggered = check_kill_conditions(state, pnl, errors)
+			status = "ACTIVADO" if triggered else "OK"
+			_LOGGER.info("Escenario %s → %s", idx, status)
+
+		if _flag_present(KILL_SWITCH_FLAG):
+			triggered = check_kill_conditions({}, 0.0, 0)
+			_LOGGER.info("Escenario flag kill_switch.flag → %s", "ACTIVADO" if triggered else "OK")
+		else:
+			_LOGGER.info("Escenario flag kill_switch.flag → OK (flag no presente)")
+		return
+
+	_LOGGER.info("Kill switch cargado. Usar desde main loop para protección activa.")
+
+
+if __name__ == "__main__":  # pragma: no cover
+	main()
+
+
+__all__.append("main")
