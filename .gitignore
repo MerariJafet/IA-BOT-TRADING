@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 data/
 reports/
+configs/
+infra/
+legacy/
+scripts/
 logs/*.log
 logs/last_heartbeat.txt
 !logs/system_setup.log
