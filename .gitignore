@@ -16,3 +16,4 @@ src/ia_bot_trading.egg-info/
 dist/
 build/
 *.bak
+_UNTRACKED_BACKUP/
