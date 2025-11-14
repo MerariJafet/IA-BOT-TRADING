@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 data/
 reports/
+logs/*.log
+logs/last_heartbeat.txt
+!logs/system_setup.log
 .installed_packages_list.txt
 .env
 src/ia_bot_trading.egg-info/

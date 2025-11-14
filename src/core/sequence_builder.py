@@ -12,7 +12,7 @@ from src.core.logger import get_logger
 
 logger = get_logger(__name__)
 
-DEFAULT_WINDOWS = ["2s", "1m", "5m", "15m", "1h", "1d"]
+DEFAULT_WINDOWS = ["2s", "1min", "5min", "15min", "1h", "1d"]
 
 
 def compute_features(df: pd.DataFrame) -> pd.Series:

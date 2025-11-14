@@ -10,7 +10,7 @@ def test_generate_sequences(tmp_path):
     data_dir.mkdir(parents=True)
     df = pd.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=200, freq="S"),
+            "timestamp": pd.date_range("2024-01-01", periods=200, freq="s"),
             "price": 100 + pd.Series(range(200)) * 0.1,
             "volume": 1.0,
         }
@@ -22,10 +22,10 @@ def test_generate_sequences(tmp_path):
         "BTCUSDT",
         input_dir=str(data_dir),
         output_dir=str(output_dir),
-        windows=["2s", "1m"],
+        windows=["2s", "1min"],
     )
 
-    assert set(results.keys()) == {"2s", "1m"}
+    assert set(results.keys()) == {"2s", "1min"}
     assert all("price_mean" in res.columns for res in results.values())
     assert all("volume_sum" in res.columns for res in results.values())
     assert all(len(res) > 0 for res in results.values())

@@ -13,3 +13,4 @@ exclude = [".venv","__pycache__","data","reports"]
 [tool.pytest.ini_options]
 addopts = "-q"
 python_files = ["test_*.py","*_test.py"]
+pythonpath = ["src"]

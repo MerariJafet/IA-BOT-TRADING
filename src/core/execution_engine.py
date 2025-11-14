@@ -357,22 +357,18 @@ class ExecutionEngine:
         trades_path = Path(self.LIVE_TRADES_PATH)
 
         # Cargar trades existentes
+        frames = []
         if trades_path.exists() and trades_path.stat().st_size > 0:
             df_existing = pd.read_parquet(trades_path)
-        else:
-            df_existing = pd.DataFrame()
+            if not df_existing.empty:
+                df_existing["timestamp"] = pd.to_datetime(df_existing["timestamp"], utc=True)
+                frames.append(df_existing)
 
-        # Agregar nuevo trade
         df_new = pd.DataFrame([order_details])
         df_new["timestamp"] = pd.to_datetime(df_new["timestamp"], utc=True)
+        frames.append(df_new)
 
-        if not df_existing.empty and "timestamp" in df_existing.columns:
-            df_existing["timestamp"] = pd.to_datetime(df_existing["timestamp"], utc=True)
-
-        df_combined = pd.concat([df_existing, df_new], ignore_index=True)
-        df_combined["timestamp"] = pd.to_datetime(df_combined["timestamp"], utc=True)
-
-        # Guardar
+        df_combined = pd.concat(frames, ignore_index=True) if len(frames) > 1 else df_new
         df_combined.to_parquet(trades_path, index=False)
 
         logger.info(f"📝 Trade registrado en {trades_path}")

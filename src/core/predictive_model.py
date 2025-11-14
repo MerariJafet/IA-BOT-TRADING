@@ -148,8 +148,8 @@ class PricePredictor:
         df["pred_next"] = np.nan
         df.iloc[self.sequence_length :, df.columns.get_loc("pred_next")] = predictions
 
-        # Rellenar NaN con el precio actual
-        df["pred_next"].fillna(df["close"], inplace=True)
+        # Rellenar NaN con el precio actual sin usar inplace para evitar warnings futuros
+        df["pred_next"] = df["pred_next"].fillna(df["close"])
 
         # Guardar predicciones
         pred_dir = Path("data/predictions")
