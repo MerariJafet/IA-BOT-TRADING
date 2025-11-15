@@ -104,3 +104,5 @@ SISTEMA DE TRADING IA - LOG DE CONFIGURACIÃ“N Y VALIDACIÃ“N
 [Virtus] Sprint 25.9  inicio del pipeline del backtesting v2. 2025-11-15 00:34:17
 [Virtus] Sprint 25.9.1  implementación inicial del backtesting_pipeline. 2025-11-15 00:36:50
 [Virtus] Sprint 25.9.2  backtesting avanzado: métricas + simulación realista iniciada. 2025-11-15 10:23:35
+[Virtus] Sprint 26.0  inicio de validación de rentabilidad (7 días BTCUSDT) 2025-11-15 10:38:32
+[Virtus] Sprint 26.0  backtest 7d completado y resultados guardados. 2025-11-15 10:59:41
