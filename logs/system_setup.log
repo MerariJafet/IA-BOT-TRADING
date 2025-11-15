@@ -101,3 +101,4 @@ SISTEMA DE TRADING IA - LOG DE CONFIGURACIÓN Y VALIDACIÓN
 [Virtus] Sprint 25.7 - pipeline cuantitativo integrado al runtime. 2025-11-14 20:14:25
 [Virtus] Sprint 25.8  entorno pytest configurado y pruebas m�nimas creadas. 2025-11-14 23:51:24
 [Virtus] Sprint 25.8  binance_market_data implementado y tests restaurados. 2025-11-15 00:33:57
+[Virtus] Sprint 25.9  inicio del pipeline del backtesting v2. 2025-11-15 00:34:17
