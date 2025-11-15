@@ -94,3 +94,5 @@ SISTEMA DE TRADING IA - LOG DE CONFIGURACIÓN Y VALIDACIÓN
 [Virtus] Sprint 25.2  Backtesting v2 inicializado. 2025-11-14 15:10:03
 [Virtus] Sprint 25.3  signal_engine.py implementado. 2025-11-14 19:15:56
 [Virtus] Sprint 25.4  microstructure.py implementado. 2025-11-14 19:18:16
+[Virtus] Sprint 25.5  filters.py implementado. 2025-11-14 19:24:00
+[Virtus] Sprint 25.5  filtros cuantitativos terminados y verificados. 2025-11-14 20:00:44
