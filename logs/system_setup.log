@@ -103,3 +103,4 @@ SISTEMA DE TRADING IA - LOG DE CONFIGURACIÃ“N Y VALIDACIÃ“N
 [Virtus] Sprint 25.8  binance_market_data implementado y tests restaurados. 2025-11-15 00:33:57
 [Virtus] Sprint 25.9  inicio del pipeline del backtesting v2. 2025-11-15 00:34:17
 [Virtus] Sprint 25.9.1  implementación inicial del backtesting_pipeline. 2025-11-15 00:36:50
+[Virtus] Sprint 25.9.2  backtesting avanzado: métricas + simulación realista iniciada. 2025-11-15 10:23:35
