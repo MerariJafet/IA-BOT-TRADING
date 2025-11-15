@@ -98,3 +98,4 @@ SISTEMA DE TRADING IA - LOG DE CONFIGURACIÃ“N Y VALIDACIÃ“N
 [Virtus] Sprint 25.5  filtros cuantitativos terminados y verificados. 2025-11-14 20:00:44
 [Virtus] Sprint 25.6  integración de señales, microestructura y filtros iniciada. 2025-11-14 20:01:08
 [Virtus] Sprint 25.6.1  signal_router y trade_decision implementados. 2025-11-14 20:04:07
+[Virtus] Sprint 25.7 - pipeline cuantitativo integrado al runtime. 2025-11-14 20:14:25

@@ -6,6 +6,7 @@ import argparse
 import contextlib
 import faulthandler
 import io
+import math
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -24,6 +25,7 @@ from src.core.kill_switch import check_kill_conditions
 from src.core.logger import get_logger
 from src.core.scheduler import SchedulerService
 from src.core.watchdog import Watchdog
+from src.quant.pipeline import QuantPipeline
 
 MAIN_LOG = Path("logs/main.log")
 METRICS_LOG = Path("logs/metrics.log")
@@ -189,7 +191,12 @@ def _gather_engine_metrics(engine: ExecutionEngine) -> Tuple[dict, float]:
     return engine_state, last_pnl
 
 
-def _perform_trading_cycle(engine: ExecutionEngine, iteration: int, dry_run: bool = False) -> float:
+def _perform_trading_cycle(
+    engine: ExecutionEngine,
+    iteration: int,
+    dry_run: bool = False,
+    pipeline: Optional[QuantPipeline] = None,
+) -> float:
     if dry_run:
         price = engine.get_current_price()
         logger.info("Ciclo check-only | precio=%s", price)
@@ -200,10 +207,83 @@ def _perform_trading_cycle(engine: ExecutionEngine, iteration: int, dry_run: boo
         logger.info("Modo TESTNET - verificación precio actual %s", price)
         return 0.0
 
+    price = engine.get_current_price()
+
+    fallback_to_legacy = pipeline is None
+
+    if pipeline is not None:
+        oscillation = 0.5 + 0.35 * math.sin(iteration / 5.0)
+        imbalance = min(max(oscillation, 0.05), 0.95)
+        total_volume = 2.0 + 0.2 * abs(math.cos(iteration / 7.0))
+        volume_buy = total_volume * imbalance
+        volume_sell = max(total_volume - volume_buy, 1e-6)
+        spread_factor = 0.00015 + 0.0001 * abs(math.sin(iteration / 9.0))
+        half_spread = price * spread_factor
+        market_frame = pipeline.add_tick(
+            mid=price,
+            bid=price - half_spread,
+            ask=price + half_spread,
+            volume_buy=volume_buy,
+            volume_sell=volume_sell,
+        )
+        pipeline_result = pipeline.process(market_frame, price)
+        decision = pipeline_result.get("decision", {})
+        action = str(decision.get("action", "HOLD")).upper()
+
+        router_info = pipeline_result.get("router")
+
+        if router_info is None:
+            reason = str(decision.get("reason", "NONE"))
+            logger.debug(
+                "Quant pipeline sin datos suficientes | iter=%s reason=%s",
+                iteration,
+                reason,
+            )
+            if reason.startswith("INSUFFICIENT_DATA"):
+                fallback_to_legacy = True
+            else:
+                return 0.0
+        elif action in {"BUY", "SELL", "EXIT"}:
+            order = engine.apply_quant_decision(decision)
+            router_info = router_info or {}
+            if order and order.get("status") == "FILLED":
+                pnl = float(order.get("pnl", 0.0))
+                logger.info(
+                    "Quant trade ejecutado | iter=%s action=%s size=%.6f pnl=%.6f signal=%s filters=%s",
+                    iteration,
+                    action,
+                    float(decision.get("size", 0.0) or 0.0),
+                    pnl,
+                    router_info.get("signal", "N/A"),
+                    router_info.get("filters_reason", "N/A"),
+                )
+                return pnl
+
+            logger.info(
+                "Quant trade omitido | iter=%s action=%s motivo=%s",
+                iteration,
+                action,
+                decision.get("reason", "EXECUTION_FAILED"),
+            )
+            return 0.0
+
+        else:
+            logger.debug(
+                "Quant pipeline HOLD | iter=%s signal=%s filters=%s reason=%s",
+                iteration,
+                router_info.get("signal"),
+                router_info.get("filters_reason"),
+                decision.get("reason", "NONE"),
+            )
+            return 0.0
+
+    if not fallback_to_legacy:
+        return 0.0
+
     side = OrderSide.BUY if iteration % 2 == 0 else OrderSide.SELL
     result = engine.execute_market_order(side, quantity=0.001)
     pnl = float(result.get("pnl", 0.0)) if result else 0.0
-    logger.info("Trade %s ejecutado | side=%s pnl=%.6f", iteration, side.value, pnl)
+    logger.info("Trade %s ejecutado (legacy) | side=%s pnl=%.6f", iteration, side.value, pnl)
     return pnl
 
 
@@ -235,6 +315,10 @@ def run_bot(args: argparse.Namespace) -> None:
     watchdog = Watchdog()
     error_tracker = ErrorTracker()
     kill_state = KillSwitchState()
+    quant_pipeline: Optional[QuantPipeline] = None
+
+    if mode == ExecutionMode.PAPER and not args.check:
+        quant_pipeline = QuantPipeline()
 
     scheduler_service = SchedulerService(
         heartbeat_fn=watchdog.record_heartbeat,
@@ -270,7 +354,12 @@ def run_bot(args: argparse.Namespace) -> None:
 
             try:
                 dry_run = args.check
-                _perform_trading_cycle(engine, iteration, dry_run=dry_run)
+                _perform_trading_cycle(
+                    engine,
+                    iteration,
+                    dry_run=dry_run,
+                    pipeline=quant_pipeline,
+                )
             except Exception as exc:  # pragma: no cover - runtime safeguard
                 logger.exception("Error en ciclo de trading: %s", exc)
                 error_tracker.register_error()

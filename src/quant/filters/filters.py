@@ -45,6 +45,16 @@ class QuantFilters:
             return prob_down >= self.cfg.min_prob
         return False
 
+    def validate(
+        self,
+        df: pd.DataFrame,
+        state: str,
+        prob_up: float,
+        prob_down: float,
+    ) -> tuple[bool, str]:
+        """Convenience wrapper returning pass/fail status and reason."""
+        return self.apply_all_filters(df, state, prob_up, prob_down)
+
     def apply_all_filters(
         self,
         df: pd.DataFrame,

@@ -13,7 +13,7 @@ import hmac
 import time
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import pandas as pd
 import requests
@@ -401,6 +401,49 @@ class ExecutionEngine:
                 self.paper_position * self.get_current_price()
             ),
         }
+
+    def has_open_position(self) -> bool:
+        """Indica si existe una posición abierta en modo paper."""
+        return abs(self.paper_position) > 1e-9
+
+    def close_position_market(self) -> Optional[Dict]:
+        """Cierra cualquier posición abierta ejecutando una orden de mercado opuesta."""
+        position = self.paper_position
+        if position > 0:
+            return self.execute_market_order(OrderSide.SELL, position)
+        if position < 0:
+            return self.execute_market_order(OrderSide.BUY, abs(position))
+
+        logger.info("🔒 No hay posición abierta que cerrar")
+        return None
+
+    def apply_quant_decision(self, decision: Dict[str, Any]) -> Optional[Dict]:
+        """Ejecuta una decisión cuantitativa traducida en acción de mercado."""
+        action = str(decision.get("action", "HOLD")).upper()
+
+        if action == "BUY":
+            size = float(decision.get("size", 0.0) or 0.0)
+            if size <= 0:
+                return None
+            return self.execute_market_order(OrderSide.BUY, size)
+
+        if action == "SELL":
+            size = float(decision.get("size", 0.0) or 0.0)
+            if size <= 0:
+                return None
+            if self.mode == ExecutionMode.PAPER and self.paper_position < size:
+                logger.info(
+                    "⚠️ SELL cuantitativo omitido por posición insuficiente | actual=%.6f requerido=%.6f",
+                    self.paper_position,
+                    size,
+                )
+                return None
+            return self.execute_market_order(OrderSide.SELL, size)
+
+        if action == "EXIT":
+            return self.close_position_market()
+
+        return None
 
 
 def simulate_trading_session(num_trades: int = 5) -> None:
